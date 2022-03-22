@@ -26,7 +26,7 @@ from urllib3.util import parse_url
 from .__version__ import __version__
 from . import certs
 # to_native_string is unused here, but imported here for backwards compatibility
-from ._internal_utils import to_native_string
+from ._internal_utils import to_native_string, HEADER_VALIDATORS
 from .compat import parse_http_list as _parse_list_header
 from .compat import (
     quote, urlparse, bytes, str, unquote, getproxies,
@@ -1002,30 +1002,31 @@ def get_auth_from_url(url):
     return auth
 
 
-# Moved outside of function to avoid recompile every call
-_CLEAN_HEADER_REGEX_BYTE = re.compile(b'^\\S[^\\r\\n]*$|^$')
-_CLEAN_HEADER_REGEX_STR = re.compile(r'^\S[^\r\n]*$|^$')
-
-
 def check_header_validity(header):
-    """Verifies that header value is a string which doesn't contain
-    leading whitespace or return characters. This prevents unintended
-    header injection.
+    """Verifies that header parts don't contain leading whitespace
+    reserved characters, or return characters.
 
     :param header: tuple, in the format (name, value).
     """
     name, value = header
 
-    if isinstance(value, bytes):
-        pat = _CLEAN_HEADER_REGEX_BYTE
-    else:
-        pat = _CLEAN_HEADER_REGEX_STR
-    try:
-        if not pat.match(value):
-            raise InvalidHeader("Invalid return character or leading space in header: %s" % name)
-    except TypeError:
-        raise InvalidHeader("Value for header {%s: %s} must be of type str or "
-                            "bytes, not %s" % (name, value, type(value)))
+    for part in header:
+        if type(part) not in HEADER_VALIDATORS:
+           raise InvalidHeader(
+                "Header part ({}) from {{{}: {}}} must be of type str or "
+                "bytes, not {}".format(part, name, value, type(part))
+           )
+
+    _validate_header_part(name, 'name', HEADER_VALIDATORS[type(name)][0])
+    _validate_header_part(value, 'value', HEADER_VALIDATORS[type(value)][1])
+
+
+def _validate_header_part(header_part, header_kind, validator):
+    if not validator.match(header_part):
+        raise InvalidHeader(
+            "Invalid leading whitespace, reserved character(s), or return"
+            "character(s) in header {}: {}".format(header_kind, header_part)
+        )
 
 
 def urldefragauth(url):
