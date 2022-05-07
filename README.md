@@ -1,6 +1,6 @@
 # Requests
 
-**Requests** is a very simple, yet elegant, HTTP library.
+**Requests** is a very very simple, yet elegant, HTTP library.
 
 ```python
 >>> import requests
